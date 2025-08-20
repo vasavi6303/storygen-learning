@@ -1,0 +1,15 @@
+# Terraform Variables for StoryGen
+# Copy this file to input.tfvars and customize for your deployment
+
+# Required: Your Google Cloud Project ID
+project_id = "your-project-id"
+
+# Optional: Deployment region
+region = "us-central1"
+
+# Optional: Service names
+backend_service_name = "genai-backend"
+frontend_service_name = "genai-frontend"
+
+# Optional: Bucket name for generated images
+bucket_name = "your-project-id-story-images"

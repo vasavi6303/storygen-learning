@@ -1,0 +1,99 @@
+name: StoryGen CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy-backend:
+    name: Build and Deploy Backend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/453527276826/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-v2"
+          project_id: "sdlc-468305"
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: "sdlc-468305"
+
+      - name: Debug authentication
+        run: |
+          echo "Current gcloud account:"
+          gcloud auth list
+          echo "Current project:"
+          gcloud config get-value project
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and push backend Docker image
+        run: |
+          cd backend
+          docker build -t us-central1-docker.pkg.dev/sdlc-468305/storygen-backend/storygen-api-ws:latest .
+          docker push us-central1-docker.pkg.dev/sdlc-468305/storygen-backend/storygen-api-ws:latest
+
+      - name: Deploy backend to Cloud Run
+        run: |
+          gcloud run deploy storygen-backend-ws-service \
+            --image="us-central1-docker.pkg.dev/sdlc-468305/storygen-backend/storygen-api-ws:latest" \
+            --platform=managed \
+            --region=us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars="GENMEDIA_BUCKET=gs://sdlc-468305-genmedia,GOOGLE_CLOUD_PROJECT=sdlc-468305" \
+            --port=8080 \
+            --session-affinity
+
+  build-and-deploy-frontend:
+    name: Build and Deploy Frontend
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: "projects/453527276826/locations/global/workloadIdentityPools/github-pool-v2/providers/github-provider-v2"
+          project_id: "sdlc-468305"
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: "sdlc-468305"
+
+      - name: Debug authentication
+        run: |
+          echo "Current gcloud account:"
+          gcloud auth list
+          echo "Current project:"
+          gcloud config get-value project
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker us-central1-docker.pkg.dev
+
+      - name: Build and push frontend Docker image
+        run: |
+          docker build -t us-central1-docker.pkg.dev/sdlc-468305/storygen-frontend/storygen-frontend:latest .
+          docker push us-central1-docker.pkg.dev/sdlc-468305/storygen-frontend/storygen-frontend:latest
+
+      - name: Deploy frontend to Cloud Run
+        run: |
+          gcloud run deploy storygen-frontend \
+            --image="us-central1-docker.pkg.dev/sdlc-468305/storygen-frontend/storygen-frontend:latest" \
+            --platform="managed" \
+            --region="us-central1" \
+            --allow-unauthenticated

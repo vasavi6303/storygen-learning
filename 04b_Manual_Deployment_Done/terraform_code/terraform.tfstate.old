@@ -1,0 +1,271 @@
+{
+  "version": 4,
+  "terraform_version": "1.12.2",
+  "serial": 46,
+  "lineage": "7955b2fe-6b62-9f4f-9058-e5a7f757e80b",
+  "outputs": {
+    "backend-service_service_uri": {
+      "value": "https://genai-backend-7qwcxs6azq-uc.a.run.app",
+      "type": "string"
+    },
+    "frontend-service_service_uri": {
+      "value": "https://genai-frontend-7qwcxs6azq-uc.a.run.app",
+      "type": "string"
+    }
+  },
+  "resources": [
+    {
+      "module": "module.generated-images-bucket",
+      "mode": "managed",
+      "type": "google_storage_bucket",
+      "name": "bucket",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 3,
+          "attributes": {
+            "autoclass": [],
+            "cors": [],
+            "custom_placement_config": [],
+            "default_event_based_hold": false,
+            "effective_labels": {
+              "goog-adc-tf-deployment": "export",
+              "goog-terraform-provisioned": "true"
+            },
+            "enable_object_retention": false,
+            "encryption": [],
+            "force_destroy": false,
+            "hierarchical_namespace": [
+              {
+                "enabled": false
+              }
+            ],
+            "id": "genai-story-images",
+            "ip_filter": [],
+            "labels": {},
+            "lifecycle_rule": [],
+            "location": "US-CENTRAL1",
+            "logging": [],
+            "name": "genai-story-images",
+            "project": "sdlc-468305",
+            "project_number": 453527276826,
+            "public_access_prevention": "inherited",
+            "requester_pays": false,
+            "retention_policy": [],
+            "rpo": null,
+            "self_link": "https://www.googleapis.com/storage/v1/b/genai-story-images",
+            "soft_delete_policy": [
+              {
+                "effective_time": "2025-08-15T04:42:03.210Z",
+                "retention_duration_seconds": 604800
+              }
+            ],
+            "storage_class": "STANDARD",
+            "terraform_labels": {
+              "goog-adc-tf-deployment": "export",
+              "goog-terraform-provisioned": "true"
+            },
+            "time_created": "2025-08-15T04:42:03.210Z",
+            "timeouts": null,
+            "uniform_bucket_level_access": true,
+            "updated": "2025-08-15T04:42:20.632Z",
+            "url": "gs://genai-story-images",
+            "versioning": [
+              {
+                "enabled": true
+              }
+            ],
+            "website": []
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjo2MDAwMDAwMDAwMDAsInJlYWQiOjI0MDAwMDAwMDAwMCwidXBkYXRlIjoyNDAwMDAwMDAwMDB9LCJzY2hlbWFfdmVyc2lvbiI6IjMifQ==",
+          "dependencies": [
+            "module.generated-images-bucket.data.google_storage_project_service_account.gcs_account",
+            "module.generated-images-bucket.module.encryption_key.google_kms_crypto_key.key",
+            "module.generated-images-bucket.module.encryption_key.google_kms_crypto_key.key_ephemeral",
+            "module.generated-images-bucket.module.encryption_key.google_kms_crypto_key_iam_binding.decrypters",
+            "module.generated-images-bucket.module.encryption_key.google_kms_crypto_key_iam_binding.encrypters",
+            "module.generated-images-bucket.module.encryption_key.google_kms_crypto_key_iam_binding.owners",
+            "module.generated-images-bucket.module.encryption_key.google_kms_key_ring.key_ring",
+            "module.project-services-billing-project.data.google_compute_default_service_account.default",
+            "module.project-services-billing-project.google_project_iam_member.project_service_identity_roles",
+            "module.project-services-billing-project.google_project_service.project_services",
+            "module.project-services-billing-project.google_project_service_identity.project_service_identities",
+            "module.project-services-sdlc-468305.data.google_compute_default_service_account.default",
+            "module.project-services-sdlc-468305.google_project_iam_member.project_service_identity_roles",
+            "module.project-services-sdlc-468305.google_project_service.project_services",
+            "module.project-services-sdlc-468305.google_project_service_identity.project_service_identities",
+            "module.project-services.data.google_compute_default_service_account.default",
+            "module.project-services.google_project_iam_member.project_service_identity_roles",
+            "module.project-services.google_project_service.project_services",
+            "module.project-services.google_project_service_identity.project_service_identities"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "module.project-services",
+      "mode": "data",
+      "type": "google_compute_default_service_account",
+      "name": "default",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services",
+      "mode": "managed",
+      "type": "google_project_iam_member",
+      "name": "project_service_identity_roles",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services",
+      "mode": "managed",
+      "type": "google_project_service",
+      "name": "project_services",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services",
+      "mode": "managed",
+      "type": "google_project_service_identity",
+      "name": "project_service_identities",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google-beta\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services-billing-project",
+      "mode": "data",
+      "type": "google_compute_default_service_account",
+      "name": "default",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services-billing-project",
+      "mode": "managed",
+      "type": "google_project_iam_member",
+      "name": "project_service_identity_roles",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": []
+    },
+    {
+      "module": "module.project-services-billing-project",
+      "mode": "managed",
+      "type": "google_project_service",
+      "name": "project_services",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "index_key": "apphub.googleapis.com",
+          "schema_version": 0,
+          "attributes": {
+            "disable_dependent_services": true,
+            "disable_on_destroy": false,
+            "id": "sdlc-468305/apphub.googleapis.com",
+            "project": "sdlc-468305",
+            "service": "apphub.googleapis.com",
+            "timeouts": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjEyMDAwMDAwMDAwMDAsInJlYWQiOjYwMDAwMDAwMDAwMCwidXBkYXRlIjoxMjAwMDAwMDAwMDAwfX0="
+        },
+        {
+          "index_key": "cloudresourcemanager.googleapis.com",
+          "schema_version": 0,
+          "attributes": {
+            "disable_dependent_services": true,
+            "disable_on_destroy": false,
+            "id": "sdlc-468305/cloudresourcemanager.googleapis.com",
+            "project": "sdlc-468305",
+            "service": "cloudresourcemanager.googleapis.com",
+            "timeouts": null
+          },
+          "sensitive_attributes": [],
+          "identity_schema_version": 0,
+          "private": "eyJlMmJmYjczMC1lY2FhLTExZTYtOGY4OC0zNDM2M2JjN2M0YzAiOnsiY3JlYXRlIjoxMjAwMDAwMDAwMDAwLCJkZWxldGUiOjEyMDAwMDAwMDAwMDAsInJlYWQiOjYwMDAwMDAwMDAwMCwidXBkYXRlIjoxMjAwMDAwMDAwMDAwfX0="
+        }
+      ]
+    },
+    {
+      "module": "module.project-services-billing-project",
+      "mode": "managed",
+      "type": "google_project_service_identity",
+      "name": "project_service_identities",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google-beta\"]",
+      "instances": []
+    }
+  ],
+  "check_results": [
+    {
+      "object_kind": "var",
+      "config_addr": "module.frontend-service.var.execution_environment",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.frontend-service.var.execution_environment",
+          "status": "unknown"
+        }
+      ]
+    },
+    {
+      "object_kind": "var",
+      "config_addr": "module.frontend-service.var.ingress",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.frontend-service.var.ingress",
+          "status": "unknown"
+        }
+      ]
+    },
+    {
+      "object_kind": "var",
+      "config_addr": "module.backend-service.var.ingress",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.backend-service.var.ingress",
+          "status": "unknown"
+        }
+      ]
+    },
+    {
+      "object_kind": "var",
+      "config_addr": "module.backend-service.var.execution_environment",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.backend-service.var.execution_environment",
+          "status": "unknown"
+        }
+      ]
+    },
+    {
+      "object_kind": "var",
+      "config_addr": "module.backend-service.var.launch_stage",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.backend-service.var.launch_stage",
+          "status": "unknown"
+        }
+      ]
+    },
+    {
+      "object_kind": "var",
+      "config_addr": "module.frontend-service.var.launch_stage",
+      "status": "unknown",
+      "objects": [
+        {
+          "object_addr": "module.frontend-service.var.launch_stage",
+          "status": "unknown"
+        }
+      ]
+    }
+  ]
+}
