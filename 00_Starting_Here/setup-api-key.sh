@@ -2,11 +2,18 @@
 
 # 🔐 StoryGen API Key Setup Script
 # ================================
-# This script securely adds your Gemini API key to Google Cloud Secret Manager
+# This script securely stores your Gemini API key in Google Cloud Secret Manager
 # 
+# What this script does:
+# • Validates project access and API availability
+# • Securely stores your Gemini API key in Secret Manager
+# • Configures proper access permissions for Cloud Run services
+# • Provides validation and testing of secret access
+#
 # Prerequisites:
 # 1. Run ./setup-direct.sh first to configure your project
 # 2. Get your API key from https://aistudio.google.com/
+# 3. Secret Manager API must be enabled (script will enable if needed)
 #
 # Usage:
 #   ./setup-api-key.sh [PROJECT_ID] [SECRET_NAME]
@@ -49,8 +56,8 @@ load_env_file() {
         echo -e "${GREEN}🔧 Loading configuration from $env_file${NC}"
         # Load environment variables, ignoring comments and empty lines
         while IFS= read -r line || [ -n "$line" ]; do
-            # Skip comments and empty lines
-            if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ -n "$line" ]]; then
+            # Skip comments, empty lines, and lines without '='
+            if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ -n "$line" ]] && [[ "$line" == *"="* ]]; then
                 # Export the variable (remove quotes if present)
                 export "$line"
             fi
@@ -217,363 +224,7 @@ else
     exit 1
 fi
 
-# Clean up and customize workflows
-echo ""
-echo -e "${BLUE}🔧 Setting up personalized CI/CD workflow${NC}"
-echo "========================================"
 
-# Get project number for Workload Identity Provider
-PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
-WORKLOAD_IDENTITY_PROVIDER="projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider-fixed"
-SERVICE_ACCOUNT_EMAIL="github-actions@$PROJECT_ID.iam.gserviceaccount.com"
-
-# Back up existing workflows
-echo "📦 Backing up original workflows..."
-mkdir -p .github/workflows/backup
-mv .github/workflows/ci-cd.yml .github/workflows/backup/ci-cd-original.yml 2>/dev/null || true
-mv .github/workflows/ci-cd-new.yml .github/workflows/backup/ 2>/dev/null || true
-mv .github/workflows/ci-cd-no-secrets.yml .github/workflows/backup/ 2>/dev/null || true
-
-# Create personalized CI/CD workflow (full 4-stage version)
-echo "🔄 Creating personalized CI/CD workflow..."
-cat > .github/workflows/ci-cd.yml << EOF
-name: StoryGen CI/CD
-
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
-
-env:
-  # PROJECT-SPECIFIC authentication values (auto-configured)
-  PROJECT_ID: "$PROJECT_ID"
-  WORKLOAD_IDENTITY_PROVIDER: "$WORKLOAD_IDENTITY_PROVIDER"
-  SERVICE_ACCOUNT_EMAIL: "$SERVICE_ACCOUNT_EMAIL"
-  
-  # Configurable values - use repository variables with defaults
-  REGION: \${{ vars.GCP_REGION || 'us-central1' }}
-  ARTIFACT_REPO: \${{ vars.ARTIFACT_REPO || 'storygen-repo' }}
-  BACKEND_SERVICE_NAME: \${{ vars.BACKEND_SERVICE_NAME || 'genai-backend' }}
-  FRONTEND_SERVICE_NAME: \${{ vars.FRONTEND_SERVICE_NAME || 'genai-frontend' }}
-  BACKEND_IMAGE_NAME: \${{ vars.BACKEND_IMAGE_NAME || 'storygen-backend' }}
-  FRONTEND_IMAGE_NAME: \${{ vars.FRONTEND_IMAGE_NAME || 'storygen-frontend' }}
-  BUCKET_NAME: \${{ vars.BUCKET_NAME || '$PROJECT_ID-story-images' }}
-  SECRET_NAME: \${{ vars.SECRET_NAME || '$SECRET_NAME' }}
-  BACKEND_MEMORY: \${{ vars.BACKEND_MEMORY || '2Gi' }}
-  BACKEND_CPU: \${{ vars.BACKEND_CPU || '2' }}
-  FRONTEND_MEMORY: \${{ vars.FRONTEND_MEMORY || '1Gi' }}
-  FRONTEND_CPU: \${{ vars.FRONTEND_CPU || '1' }}
-  MIN_INSTANCES: \${{ vars.MIN_INSTANCES || '0' }}
-  MAX_INSTANCES: \${{ vars.MAX_INSTANCES || '2' }}
-
-jobs:
-  setup-infrastructure:
-    name: Setup Infrastructure
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Validate configuration
-        run: |
-          echo "🔍 Validating configuration..."
-          echo "✅ Configuration:"
-          echo "  Project ID: \${{ env.PROJECT_ID }}"
-          echo "  Region: \${{ env.REGION }}"
-          echo "  Service Account: \${{ env.SERVICE_ACCOUNT_EMAIL }}"
-          echo "  Backend Service: \${{ env.BACKEND_SERVICE_NAME }}"
-          echo "  Frontend Service: \${{ env.FRONTEND_SERVICE_NAME }}"
-
-      - name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: \${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: \${{ env.SERVICE_ACCOUNT_EMAIL }}
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Enable required APIs
-        run: |
-          echo "🔧 Enabling required Google Cloud APIs..."
-          gcloud services enable \\
-            run.googleapis.com \\
-            cloudbuild.googleapis.com \\
-            artifactregistry.googleapis.com \\
-            aiplatform.googleapis.com \\
-            storage.googleapis.com \\
-            secretmanager.googleapis.com \\
-            --project=\${{ env.PROJECT_ID }}
-
-      - name: Setup Artifact Registry
-        run: |
-          echo "🏗️ Setting up Artifact Registry..."
-          if ! gcloud artifacts repositories describe \${{ env.ARTIFACT_REPO }} \\
-               --location=\${{ env.REGION }} \\
-               --project=\${{ env.PROJECT_ID }} &>/dev/null; then
-            echo "Creating Artifact Registry repository..."
-            gcloud artifacts repositories create \${{ env.ARTIFACT_REPO }} \\
-              --repository-format=docker \\
-              --location=\${{ env.REGION }} \\
-              --description="Docker repository for StoryGen application" \\
-              --project=\${{ env.PROJECT_ID }}
-          else
-            echo "✅ Artifact Registry repository already exists"
-          fi
-          gcloud auth configure-docker \${{ env.REGION }}-docker.pkg.dev
-
-      - name: Setup Secret Manager
-        run: |
-          echo "🔐 Setting up Secret Manager..."
-          if ! gcloud secrets describe \${{ env.SECRET_NAME }} \\
-               --project=\${{ env.PROJECT_ID }} &>/dev/null; then
-            echo "Creating secret for Google API key..."
-            gcloud secrets create \${{ env.SECRET_NAME }} \\
-              --replication-policy="automatic" \\
-              --project=\${{ env.PROJECT_ID }}
-          else
-            echo "✅ Secret Manager secret already exists"
-          fi
-
-  build-and-deploy-backend:
-    name: Build and Deploy Backend
-    runs-on: ubuntu-latest
-    needs: setup-infrastructure
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      backend-url: \${{ steps.deploy-backend.outputs.backend-url }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: \${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: \${{ env.SERVICE_ACCOUNT_EMAIL }}
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker \${{ env.REGION }}-docker.pkg.dev
-
-      - name: Build and push backend Docker image
-        run: |
-          echo "🔨 Building backend Docker image..."
-          cd backend
-          gcloud builds submit \\
-            --tag \${{ env.REGION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/\${{ env.ARTIFACT_REPO }}/\${{ env.BACKEND_IMAGE_NAME }}:latest \\
-            --project=\${{ env.PROJECT_ID }}
-          echo "✅ Backend image built and pushed successfully"
-
-      - name: Deploy backend to Cloud Run
-        id: deploy-backend
-        run: |
-          echo "📦 Deploying backend to Cloud Run..."
-          FRONTEND_URL="https://\${{ env.FRONTEND_SERVICE_NAME }}-\${{ env.PROJECT_ID }}.\${{ env.REGION }}.run.app"
-          
-          gcloud run deploy \${{ env.BACKEND_SERVICE_NAME }} \\
-            --image=\${{ env.REGION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/\${{ env.ARTIFACT_REPO }}/\${{ env.BACKEND_IMAGE_NAME }}:latest \\
-            --platform=managed \\
-            --region=\${{ env.REGION }} \\
-            --allow-unauthenticated \\
-            --port=8080 \\
-            --session-affinity \\
-            --set-env-vars="GOOGLE_CLOUD_PROJECT=\${{ env.PROJECT_ID }}" \\
-            --set-env-vars="GOOGLE_CLOUD_PROJECT_ID=\${{ env.PROJECT_ID }}" \\
-            --set-env-vars="GENMEDIA_BUCKET=\${{ env.BUCKET_NAME }}" \\
-            --set-env-vars="GOOGLE_GENAI_USE_VERTEXAI=FALSE" \\
-            --set-env-vars="GOOGLE_CLOUD_REGION=\${{ env.REGION }}" \\
-            --set-env-vars="FRONTEND_URL=\$FRONTEND_URL" \\
-            --set-secrets="GOOGLE_API_KEY=\${{ env.SECRET_NAME }}:latest" \\
-            --memory=\${{ env.BACKEND_MEMORY }} \\
-            --cpu=\${{ env.BACKEND_CPU }} \\
-            --min-instances=\${{ env.MIN_INSTANCES }} \\
-            --max-instances=\${{ env.MAX_INSTANCES }} \\
-            --project=\${{ env.PROJECT_ID }}
-
-          BACKEND_URL=\$(gcloud run services describe \${{ env.BACKEND_SERVICE_NAME }} \\
-            --platform=managed \\
-            --region=\${{ env.REGION }} \\
-            --format="value(status.url)" \\
-            --project=\${{ env.PROJECT_ID }})
-
-          echo "✅ Backend deployed successfully!"
-          echo "🔗 Backend URL: \$BACKEND_URL"
-          echo "backend-url=\$BACKEND_URL" >> \$GITHUB_OUTPUT
-
-  build-and-deploy-frontend:
-    name: Build and Deploy Frontend
-    runs-on: ubuntu-latest
-    needs: [setup-infrastructure, build-and-deploy-backend]
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      frontend-url: \${{ steps.deploy-frontend.outputs.frontend-url }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Authenticate with Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: \${{ env.WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: \${{ env.SERVICE_ACCOUNT_EMAIL }}
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: \${{ env.PROJECT_ID }}
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker \${{ env.REGION }}-docker.pkg.dev
-
-      - name: Build and push frontend Docker image
-        run: |
-          echo "🔨 Building frontend Docker image..."
-          BACKEND_URL="\${{ needs.build-and-deploy-backend.outputs.backend-url }}"
-          echo "🔗 Using backend URL: \$BACKEND_URL"
-          
-          cd frontend
-          docker build \\
-            --build-arg NEXT_PUBLIC_BACKEND_URL="\$BACKEND_URL" \\
-            -t \${{ env.REGION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/\${{ env.ARTIFACT_REPO }}/\${{ env.FRONTEND_IMAGE_NAME }}:latest .
-          
-          docker push \${{ env.REGION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/\${{ env.ARTIFACT_REPO }}/\${{ env.FRONTEND_IMAGE_NAME }}:latest
-          echo "✅ Frontend image built and pushed successfully"
-
-      - name: Deploy frontend to Cloud Run
-        id: deploy-frontend
-        run: |
-          echo "🚀 Deploying frontend to Cloud Run..."
-          BACKEND_URL="\${{ needs.build-and-deploy-backend.outputs.backend-url }}"
-          
-          gcloud run deploy \${{ env.FRONTEND_SERVICE_NAME }} \\
-            --image=\${{ env.REGION }}-docker.pkg.dev/\${{ env.PROJECT_ID }}/\${{ env.ARTIFACT_REPO }}/\${{ env.FRONTEND_IMAGE_NAME }}:latest \\
-            --platform=managed \\
-            --region=\${{ env.REGION }} \\
-            --allow-unauthenticated \\
-            --port=3000 \\
-            --set-env-vars="NEXT_PUBLIC_BACKEND_URL=\$BACKEND_URL" \\
-            --memory=\${{ env.FRONTEND_MEMORY }} \\
-            --cpu=\${{ env.FRONTEND_CPU }} \\
-            --min-instances=\${{ env.MIN_INSTANCES }} \\
-            --max-instances=\${{ env.MAX_INSTANCES }} \\
-            --project=\${{ env.PROJECT_ID }}
-
-          FRONTEND_URL=\$(gcloud run services describe \${{ env.FRONTEND_SERVICE_NAME }} \\
-            --platform=managed \\
-            --region=\${{ env.REGION }} \\
-            --format="value(status.url)" \\
-            --project=\${{ env.PROJECT_ID }})
-
-          echo "✅ Frontend deployed successfully!"
-          echo "🌐 Frontend URL: \$FRONTEND_URL"
-          echo "frontend-url=\$FRONTEND_URL" >> \$GITHUB_OUTPUT
-
-  health-check:
-    name: Health Check & Validation
-    runs-on: ubuntu-latest
-    needs: [build-and-deploy-backend, build-and-deploy-frontend]
-    permissions:
-      contents: read
-    steps:
-      - name: Test Backend Health
-        run: |
-          echo "🏥 Testing backend health..."
-          BACKEND_URL="\${{ needs.build-and-deploy-backend.outputs.backend-url }}"
-          
-          if [ -z "\$BACKEND_URL" ]; then
-            echo "❌ Backend URL not available"
-            exit 1
-          fi
-          
-          echo "Testing backend at: \$BACKEND_URL"
-          for i in {1..5}; do
-            echo "Attempt \$i/5..."
-            HEALTH_RESPONSE=\$(curl -s -o /dev/null -w "%{http_code}" "\$BACKEND_URL/health" || echo "000")
-            
-            if [ "\$HEALTH_RESPONSE" = "200" ]; then
-              echo "✅ Backend health check passed"
-              curl -s "\$BACKEND_URL/health"
-              break
-            else
-              echo "⚠️ Backend health check failed (HTTP \$HEALTH_RESPONSE)"
-              if [ \$i -eq 5 ]; then
-                echo "❌ Backend health check failed after 5 attempts"
-                exit 1
-              fi
-              echo "Retrying in 30 seconds..."
-              sleep 30
-            fi
-          done
-
-      - name: Test Frontend Accessibility
-        run: |
-          echo "🌐 Testing frontend accessibility..."
-          FRONTEND_URL="\${{ needs.build-and-deploy-frontend.outputs.frontend-url }}"
-          
-          if [ -z "\$FRONTEND_URL" ]; then
-            echo "❌ Frontend URL not available"
-            exit 1
-          fi
-          
-          echo "Testing frontend at: \$FRONTEND_URL"
-          FRONTEND_RESPONSE=\$(curl -s -o /dev/null -w "%{http_code}" "\$FRONTEND_URL" || echo "000")
-          
-          if [ "\$FRONTEND_RESPONSE" = "200" ]; then
-            echo "✅ Frontend accessibility check passed"
-          else
-            echo "❌ Frontend accessibility check failed (HTTP \$FRONTEND_RESPONSE)"
-            echo "Retrying in 30 seconds..."
-            sleep 30
-            FRONTEND_RESPONSE=\$(curl -s -o /dev/null -w "%{http_code}" "\$FRONTEND_URL" || echo "000")
-            if [ "\$FRONTEND_RESPONSE" = "200" ]; then
-              echo "✅ Frontend accessibility check passed on retry"
-            else
-              echo "❌ Frontend accessibility check failed on retry (HTTP \$FRONTEND_RESPONSE)"
-              exit 1
-            fi
-          fi
-
-      - name: Display Deployment Summary
-        run: |
-          echo ""
-          echo "🎉 Deployment Complete!"
-          echo "======================="
-          echo ""
-          echo "📋 Configuration Used:"
-          echo "  Project ID: \${{ env.PROJECT_ID }}"
-          echo "  Region: \${{ env.REGION }}"
-          echo "  Backend Service: \${{ env.BACKEND_SERVICE_NAME }}"
-          echo "  Frontend Service: \${{ env.FRONTEND_SERVICE_NAME }}"
-          echo ""
-          echo "📋 Service URLs:"
-          echo "🔗 Backend:  \${{ needs.build-and-deploy-backend.outputs.backend-url }}"
-          echo "🌐 Frontend: \${{ needs.build-and-deploy-frontend.outputs.frontend-url }}"
-          echo ""
-          echo "📋 Next Steps:"
-          echo "1. Visit your application at the Frontend URL"
-          echo "2. Verify the connection indicator shows 'Connected'"
-          echo "3. Test story generation functionality"
-EOF
-
-echo -e "${GREEN}✅ Personalized CI/CD workflow created for project: $PROJECT_ID${NC}"
 
 echo ""
 echo -e "${CYAN}🎉 API Key Setup Complete!${NC}"
@@ -582,23 +233,21 @@ echo ""
 echo -e "${GREEN}✅ Gemini API key securely stored in Secret Manager${NC}"
 echo -e "${GREEN}✅ Project: $PROJECT_ID${NC}"
 echo -e "${GREEN}✅ Secret: $SECRET_NAME${NC}"
-echo -e "${GREEN}✅ CI/CD workflow optimized${NC}"
 echo ""
-echo -e "${BLUE}🚀 Ready for CI/CD!${NC}"
-echo "==================="
-echo "Your setup is now complete. The CI/CD pipeline will:"
-echo "1. ✅ Authenticate securely using Workload Identity"
-echo "2. ✅ Access your API key from Secret Manager"
-echo "3. ✅ Deploy your StoryGen application automatically"
+echo -e "${BLUE}🔐 Secret Manager Summary${NC}"
+echo "========================="
+echo "• API key is now available to Cloud Run services"
+echo "• Applications can access it via: GOOGLE_API_KEY environment variable"
+echo "• Secret is automatically replicated across regions"
 echo ""
 echo -e "${YELLOW}📋 Next Steps:${NC}"
-echo "1. Push your code to the main branch"
-echo "2. Watch the deployment in GitHub Actions"
-echo "3. Access your deployed app (URLs will be shown in workflow output)"
+echo "1. Configure your CI/CD pipeline to use this secret"
+echo "2. Deploy your application with Secret Manager integration"
+echo "3. Verify the API key is accessible in your running services"
 echo ""
-echo -e "${BLUE}💡 Tips:${NC}"
-echo "• View deployment: Go to your GitHub repo → Actions tab"
+echo -e "${BLUE}💡 Useful Commands:${NC}"
+echo "• View secret: gcloud secrets describe $SECRET_NAME --project=$PROJECT_ID"
+echo "• Access secret: gcloud secrets versions access latest --secret=$SECRET_NAME --project=$PROJECT_ID"
 echo "• Update API key: Run this script again anytime"
-echo "• Check secret: gcloud secrets versions access latest --secret=$SECRET_NAME --project=$PROJECT_ID"
 echo ""
-echo -e "${GREEN}🎯 Your StoryGen is ready to deploy! 🚀${NC}"
+echo -e "${GREEN}🎯 Your Gemini API key is securely configured! 🔐${NC}"

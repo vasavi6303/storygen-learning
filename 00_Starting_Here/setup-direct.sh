@@ -69,8 +69,8 @@ load_env_file() {
         echo -e "${GREEN}🔧 Loading configuration from $env_file${NC}"
         # Load environment variables, ignoring comments and empty lines
         while IFS= read -r line || [ -n "$line" ]; do
-            # Skip comments and empty lines
-            if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ -n "$line" ]]; then
+            # Skip comments, empty lines, and lines without '='
+            if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ -n "$line" ]] && [[ "$line" == *"="* ]]; then
                 # Export the variable (remove quotes if present)
                 export "$line"
             fi
