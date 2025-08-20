@@ -184,8 +184,4 @@ echo "   Frontend: $FRONTEND_URL"
 echo ""
 echo "📝 URLs saved to deployment-urls.env"
 echo ""
-echo "🏥 Running deployment health check..."
-./check-deployment.sh
-
-echo ""
 echo "🎯 Next step: Test your application at the Frontend URL"

@@ -1,6 +1,5 @@
 """
-ADK Configuration for persistent session storage
-This resolves the Web UI evaluation 404 error by using DatabaseSessionService
+ADK Configuration for persistent session storage by using DatabaseSessionService
 """
 
 import os
