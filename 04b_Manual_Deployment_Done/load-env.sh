@@ -9,7 +9,7 @@ if [ -f "$ENV_FILE" ]; then
     echo "📄 Loading environment variables from $ENV_FILE"
     
     # Load .env file, ignoring comments and empty lines
-    export $(grep -v '^#' "$ENV_FILE" | grep -v '^$' | xargs)
+    export $(grep -E '^[a-zA-Z_]+\w*=' "$ENV_FILE")
     
     # Set derived variables for deployment
     export PROJECT_ID="$GOOGLE_CLOUD_PROJECT_ID"

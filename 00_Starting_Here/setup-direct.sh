@@ -248,6 +248,7 @@ ROLES=(
     "roles/cloudbuild.builds.editor"
     "roles/artifactregistry.admin"
     "roles/serviceusage.serviceUsageAdmin"
+    "roles/serviceusage.serviceUsageConsumer"
     "roles/storage.admin"
     "roles/secretmanager.admin"
     "roles/aiplatform.admin"
