@@ -57,9 +57,9 @@ echo "✅ Frontend build completed"
 echo "🔧 Starting backend server..."
 cd ../backend
 
-# Check if main_image.py exists
-if [ ! -f "main_image.py" ]; then
-    echo "❌ main_image.py not found in backend directory"
+# Check if main.py exists
+if [ ! -f "main.py" ]; then
+    echo "❌ main.py not found in backend directory"
     exit 1
 fi
 
@@ -69,4 +69,4 @@ echo "Press Ctrl+C to stop the server"
 echo "----------------------------------------"
 
 # Start the backend server
-python main_image.py
+python main.py

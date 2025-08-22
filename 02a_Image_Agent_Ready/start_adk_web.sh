@@ -1,15 +1,14 @@
 #!/bin/bash
 # ====================================================
-# Combined Story Generation App Startup Script
+# ADK Web UI Startup Script for Story Generation Agent
 #
 # This script:
 # 1. Activates the virtual environment
 # 2. Configures gcloud authentication and project settings
-# 3. Builds the frontend
-# 4. Starts the backend server
+# 3. Starts the ADK Web UI with persistent session storage
 #
 # Usage:
-#   ./startup.sh [PROJECT_ID]
+#   ./start_adk_web.sh [PROJECT_ID]
 # ====================================================
 
 set -e
@@ -19,11 +18,16 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Get the script directory and navigate to it
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+
+echo -e "${CYAN}🚀 Starting ADK Web UI for Story Generation Agent${NC}"
+echo -e "${CYAN}==================================================${NC}"
+echo ""
 
 # --- Function to setup virtual environment ---
 setup_virtual_env() {
@@ -68,13 +72,6 @@ check_prerequisites() {
     fi
     echo -e "${GREEN}✅ gcloud CLI is installed.${NC}"
 
-    # Check for npm
-    if ! command -v npm &> /dev/null; then
-        echo -e "${RED}❌ npm not found. Please install Node.js and npm.${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}✅ npm is installed.${NC}"
-
     # Check for python
     if ! command -v python &> /dev/null && ! command -v python3 &> /dev/null; then
         echo -e "${RED}❌ Python not found. Please install Python.${NC}"
@@ -82,12 +79,19 @@ check_prerequisites() {
     fi
     echo -e "${GREEN}✅ Python is installed.${NC}"
 
+    # Check for adk command
+    if ! command -v adk &> /dev/null; then
+        echo -e "${RED}❌ ADK CLI not found. Please ensure it's installed in your virtual environment.${NC}"
+        echo "   You may need to run: pip install google-adk"
+        exit 1
+    fi
+    echo -e "${GREEN}✅ ADK CLI is available.${NC}"
+
     # Check if user is authenticated
     if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q "."; then
         echo -e "${YELLOW}⚠️ You are not logged into gcloud.${NC}"
         echo -e "${BLUE}Please log in with your Google account...${NC}"
         gcloud auth login
-        gcloud auth application-default login
     fi
     
     local current_account=$(gcloud auth list --filter=status:ACTIVE --format="value(account)" | head -n 1)
@@ -133,71 +137,91 @@ configure_auth() {
     gcloud config set project "$PROJECT_ID"
     echo -e "${GREEN}✅ gcloud project set to '$PROJECT_ID'.${NC}"
     
+    echo -e "${BLUE}🔧 Setting up Application Default Credentials...${NC}"
+    
+    # Function to clean up and retry authentication
+    retry_auth() {
+        echo -e "${YELLOW}🔄 Cleaning up existing credentials and retrying...${NC}"
+        gcloud auth application-default revoke 2>/dev/null || true
+        echo -e "${BLUE}🔑 Starting fresh Application Default Credentials setup...${NC}"
+        if ! gcloud auth application-default login; then
+            echo -e "${RED}❌ Authentication failed. Please try manual setup:${NC}"
+            echo "1. Run: gcloud auth application-default revoke"
+            echo "2. Run: gcloud auth application-default login --no-browser"
+            echo "3. Follow the instructions provided"
+            exit 1
+        fi
+    }
+    
+    # Check if application default credentials file exists and is valid
+    if [ ! -f "$HOME/.config/gcloud/application_default_credentials.json" ]; then
+        echo -e "${YELLOW}⚠️ Application Default Credentials not found. Setting up now...${NC}"
+        if ! gcloud auth application-default login; then
+            retry_auth
+        fi
+    else
+        echo -e "${GREEN}✅ Application Default Credentials file found${NC}"
+        # Try to set quota project - if it fails, re-authenticate
+        if ! gcloud auth application-default set-quota-project "$PROJECT_ID" 2>/dev/null; then
+            echo -e "${YELLOW}⚠️ Existing credentials don't work or have scope issues. Re-authenticating...${NC}"
+            retry_auth
+        else
+            echo -e "${GREEN}✅ Quota project set successfully${NC}"
+            return 0
+        fi
+    fi
+    
+    # Set quota project after authentication
     echo -e "${BLUE}🔧 Setting quota project for Application Default Credentials...${NC}"
-    gcloud auth application-default set-quota-project "$PROJECT_ID"
+    if ! gcloud auth application-default set-quota-project "$PROJECT_ID"; then
+        echo -e "${RED}❌ Failed to set quota project. Please run manually:${NC}"
+        echo "gcloud auth application-default set-quota-project $PROJECT_ID"
+        exit 1
+    fi
     echo -e "${GREEN}✅ Quota project set to '$PROJECT_ID'.${NC}"
     
     echo -e "${GREEN}🎉 Authentication and project configuration complete!${NC}"
 }
 
-# --- Function to setup frontend ---
-setup_frontend() {
-    echo -e "${BLUE}🎨 Setting up frontend...${NC}"
+# --- Function to setup ADK Web UI ---
+setup_adk_web() {
+    echo -e "${BLUE}🌐 Setting up ADK Web UI with persistent session storage...${NC}"
     
-    # Check if frontend directory exists
-    if [ ! -d "frontend" ]; then
-        echo -e "${RED}❌ frontend directory not found${NC}"
-        exit 1
-    fi
+    # Create sessions directory if it doesn't exist
+    SESSIONS_DIR="$HOME/.adk/sessions"
+    mkdir -p "$SESSIONS_DIR"
     
-    cd frontend
-
-    # Install dependencies
-    echo -e "${BLUE}📥 Installing npm dependencies...${NC}"
-    npm install
-
-    # Build the frontend
-    echo -e "${BLUE}🏗️  Building frontend...${NC}"
-    npm run build
-
-    echo -e "${GREEN}✅ Frontend build completed${NC}"
+    # SQLite database file for session persistence
+    DB_FILE="$SESSIONS_DIR/adk_web_sessions.db"
+    SESSION_URI="sqlite:///$DB_FILE"
     
-    # Return to script directory
-    cd "$SCRIPT_DIR"
-}
-
-# --- Function to start backend ---
-start_backend() {
-    echo -e "${BLUE}🔧 Starting backend server...${NC}"
+    echo -e "${BLUE}🗄️ Session database: $DB_FILE${NC}"
+    echo -e "${BLUE}📡 Session URI: $SESSION_URI${NC}"
     
-    # Check if backend directory exists
-    if [ ! -d "backend" ]; then
-        echo -e "${RED}❌ backend directory not found${NC}"
-        exit 1
-    fi
-    
+    # Navigate to backend directory where the agents are located
     cd backend
-
-    # Check if main.py exists
-    if [ ! -f "main.py" ]; then
-        echo -e "${RED}❌ main.py not found in backend directory${NC}"
-        exit 1
-    fi
-
-    echo -e "${GREEN}🌟 Starting Python backend server...${NC}"
-    echo -e "${BLUE}Backend will be running at: http://localhost:8000${NC}"
+    
+    echo ""
+    echo -e "${GREEN}🌟 Starting ADK Web UI...${NC}"
+    echo -e "${CYAN}🌐 ADK Web UI will be available at: http://localhost:8080${NC}"
+    echo -e "${CYAN}📊 Evaluation results will persist across requests!${NC}"
     echo -e "${YELLOW}Press Ctrl+C to stop the server${NC}"
     echo "----------------------------------------"
-
-    # Start the backend server
-    python main.py
+    
+    # Start ADK Web UI with persistent sessions
+    adk web \
+        --session_service_uri="$SESSION_URI" \
+        --host=127.0.0.1 \
+        --port=8080 \
+        --log_level=info \
+        --reload \
+        .
+    
+    echo -e "${BLUE}🛑 ADK Web UI stopped${NC}"
 }
 
 # --- Main execution ---
 main() {
-    echo -e "${BLUE}🚀 Starting Story Generation App Complete Setup...${NC}"
-    echo ""
-    
     # Step 1: Setup virtual environment
     setup_virtual_env
     echo ""
@@ -214,12 +238,18 @@ main() {
     configure_auth
     echo ""
     
-    # Step 5: Setup frontend
-    setup_frontend
-    echo ""
-    
-    # Step 6: Start backend
-    start_backend
+    # Step 5: Setup and start ADK Web UI
+    setup_adk_web
 }
+
+# Handle script interruption gracefully
+cleanup_on_exit() {
+    echo ""
+    echo -e "${YELLOW}⚠️ ADK Web UI stopped by user${NC}"
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup_on_exit SIGINT SIGTERM
 
 main "$@"

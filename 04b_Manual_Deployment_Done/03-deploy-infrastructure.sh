@@ -102,6 +102,18 @@ gcloud run services add-iam-policy-binding "$FRONTEND_SERVICE_NAME" \
     --region="$REGION" \
     --project="$PROJECT_ID" || echo "Frontend already public"
 
+echo ""
+echo "🏷️  Applying labels to services..."
+gcloud run services update "$BACKEND_SERVICE_NAME" \
+    --region="$REGION" \
+    --project="$PROJECT_ID" \
+    --update-labels="dev-tutorial=codelab-annie-devfest"
+
+gcloud run services update "$FRONTEND_SERVICE_NAME" \
+    --region="$REGION" \
+    --project="$PROJECT_ID" \
+    --update-labels="dev-tutorial=codelab-annie-devfest"
+
 # Configure secrets for backend
 echo "🔐 Configuring backend secrets..."
 gcloud run services update "$BACKEND_SERVICE_NAME" \

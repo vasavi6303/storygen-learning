@@ -153,11 +153,7 @@ echo ""
 echo "🔍 Checking if secret exists..."
 if gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" > /dev/null 2>&1; then
     echo -e "${YELLOW}⚠️ Secret '$SECRET_NAME' already exists${NC}"
-    read -p "Update existing secret with new API key? (y/N): " update_secret
-    if [[ ! $update_secret =~ ^[Yy]$ ]]; then
-        echo "❌ Setup cancelled."
-        exit 1
-    fi
+    echo -e "${GREEN}✅ Will automatically update existing secret with new API key${NC}"
     UPDATING=true
 else
     echo -e "${GREEN}✅ Secret '$SECRET_NAME' will be created${NC}"
